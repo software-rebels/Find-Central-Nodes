@@ -1,2 +1,2 @@
 # Find-Central-Nodes
-Hello
+This repository contains the code that builds a graph representation using HashMaps from the trace.gdf file of any given software system. It further contains methods to output the central nodes i.e the nodes that have the most number of dependencies. To quantitatively figure out the central nodes a pageranking algorithm was used to give each node a score depending on its out/in degree and also the out/in degree of its neighbours.
