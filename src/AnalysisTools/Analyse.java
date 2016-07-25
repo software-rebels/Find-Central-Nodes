@@ -6,13 +6,60 @@ import java.text.*;
 
 public class Analyse 
 {
-	public directedGraph graph;
+	public DirectedGraph graph;
+
+	public String traceGdfLocation;
+	public String resultsStorageLocation;
 	
 	public Analyse()
 	{
-		graph = new directedGraph();
+		graph = new DirectedGraph();
 	}
 	
+	public static void main(String[] args)
+	{
+		Analyse graphAnalysis = new Analyse();
+		graphAnalysis.getPropValues();
+
+		graphAnalysis.createGraph(graphAnalysis.traceGdfLocation);
+		System.out.println("Graph Created");
+
+		graphAnalysis.pageRanks();
+		System.out.println("Page ranks calculated");
+
+		graphAnalysis.print(graphAnalysis.resultsStorageLocation);
+		System.out.println("Done");
+	}
+
+	public void getPropValues()
+	{
+		try
+		{
+			Properties prop = new Properties();
+			String propFileName = "config.properties";
+			InputStream inputStream = getClass().getClassLoader().getResourceAsStream(propFileName);
+
+			if(inputStream != null)
+			{
+				prop.load(inputStream);
+			}
+			else
+			{
+				throw new FileNotFoundException("property file '"+propFileName+"' npt found in the classpath.");
+			}
+
+			inputStream.close();
+
+			this.traceGdfLocation = prop.getProperty("traceGdfLocation");
+			this.resultsStorageLocation = prop.getProperty("resultsStorageLocation");
+		}
+		catch(Exception e)
+		{
+			e.printStackTrace();
+		}
+	}
+	
+	//Traverses the trace.gdf file and creates a graph using hashmaps.
 	public void createGraph(String traceFile)
 	{
 		String readLine = "";
@@ -38,7 +85,11 @@ public class Analyse
 				
 				if(temp[8].equals("1"))
 				{
-					graph.setPageRank(temp[0], -1.0);
+					graph.setPageRank(temp[0], (double)(-1));
+				}
+				else if(temp[8].equals("0"))
+				{
+					graph.setPageRank(temp[0], (double)(1));
 				}
 			}
 			
@@ -52,6 +103,7 @@ public class Analyse
 				
 				temp = readLine.split(",");
 				graph.addEdge(temp[0], temp[1]);
+				graph.addInDegree(temp[0], temp[1]);
 			}
 			
 			br.close();
@@ -62,102 +114,82 @@ public class Analyse
 		}
 	}
 	
-	public void computePageRanks()
-	{
-		DateFormat dateformat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
-		
+	//Calculates pageranks.
+	public void pageRanks()
+	{		
 		LinkedList<String> vertices = graph.getVertices();
-		Iterator<String> i = vertices.iterator();
-		while(i.hasNext())
-		{
-			String node = i.next();
-			if(!(graph.getPageRank(node) == -1.0))
-			{
-				graph.setPageRank(node, 1.0);
-			}
-		}
 		
-		for(int j=0; j<3; j++)
+		double d = 0.85;
+		
+		for(int j=0; j<100; j++)
 		{
 			Iterator<String> k = vertices.iterator();
+			
 			while(k.hasNext())
 			{
-				String s = k.next();
-				double pageRank = 0.5;
+				String curNode = k.next();
+				double pagerank = 1-d;
 				
-				//neighbours refer to outgoing edges
-				LinkedList<String> neighbours = graph.getNeighbours(s);
-				Iterator<String> l = neighbours.iterator();
-				while(graph.getPageRank(s)!=-1.0 && l.hasNext())
+				if(graph.getPageRank(curNode) != -1.0)
 				{
-					String t = l.next();
-					pageRank+=(0.5*(graph.getPageRank(t)/graph.getInDegree(t)));
-				}
-				
-				if(graph.getPageRank(s)!=-1.0)
-				{
-					graph.setPageRank(s, pageRank);
+					LinkedList<String> inDegrees = graph.getNeighbours(curNode);
+					Iterator<String> iter = inDegrees.iterator();
+					
+					while(iter.hasNext())
+					{
+						String neighIn = iter.next();
+						if(graph.getPageRank(neighIn) != -1.0)
+						{
+							//Two Different Formulas
+							//First one is the one used by google to rank webpages according to their authority.
+							//Second one is a slight modification of the first since the direction of arrows have different meanings
+							//in file dependency graphs than they do in graph for the www.
+							//pagerank += d*((graph.getPageRank(neighIn))/(graph.getOutDegree(neighIn)));
+							pagerank += d*((graph.getPageRank(neighIn))/(graph.getInDegree(neighIn)));
+						}
+					}
+					
+					graph.setPageRank(curNode, pagerank);
 				}
 			}
-			Date date = new Date();
-			System.out.println(j + " iteration completed at "+dateformat.format(date));
 		}
-	}
-	
-	public void outputHubs(int number)
-	{
-		ArrayList<String> keys = new ArrayList<>(graph.pageRanks.keySet());
-		ArrayList<Double> values = new ArrayList<>(graph.pageRanks.values());
-		Collections.sort(keys, Collections.reverseOrder());
-		Collections.sort(values, Collections.reverseOrder());
 		
-		Iterator<Double> valueIt = values.iterator();
-		for(int i=0; i<number; i++)
-		{
-			Double comp1 = valueIt.next();
-			
-			Iterator<String> keyIt = keys.iterator();
-			while(keyIt.hasNext())
-			{
-				String temp = keyIt.next();
-				Double comp2 = graph.pageRanks.get(temp);
-				
-				if(comp1.doubleValue() == comp2.doubleValue())
-				{
-					System.out.println((i+1)+": "+temp+" --> "+comp1);
-					break;
-				}
-			}
-		}
 	}
 	
-	public void print()
+	//Prints sorted page ranks to file	
+	public void print(String resultsStorageLocation)
 	{
 		try
 		{
-			BufferedWriter bw = new BufferedWriter(new FileWriter(new File("C:/Users/Owais/Desktop/vtkAnalysis.txt")));
-			Iterator<String> i = graph.pageRanks.keySet().iterator();
-			while(i.hasNext())
+			BufferedWriter bw = new BufferedWriter(new FileWriter(new File(resultsStorageLocation)));
+
+			LinkedList<Node> nodes = new LinkedList<Node>();
+			Iterator<String> itr = graph.pageRanks.keySet().iterator();
+			while(itr.hasNext())
 			{
-				String s = i.next();
-				bw.write(s+" : "+graph.pageRanks.get(s));
-				bw.newLine();
+				String node = itr.next();
+				nodes.add(new Node(node, graph.pageRanks.get(node)));
 			}
+
+			Collections.sort(nodes);
+			Iterator iter = nodes.iterator();
+			while(iter.hasNext())
+			{
+				Object element = iter.next();
+
+				//Dont print phony targets.
+				if(((Node)element).getRank() != -1.0)
+				{
+					bw.write(element.toString());
+					bw.newLine();
+				}
+			}
+
 			bw.close();
 		}
 		catch(Exception e)
 		{
 			e.printStackTrace();
 		}
-	}
-	
-	public static void main(String[] args)
-	{
-		Analyse graphAnalysis = new Analyse();
-		graphAnalysis.createGraph("/home/owais/vtk/trace.gdf");
-		System.out.println("Graph Created");
-		System.out.println(graphAnalysis.graph.getVertices());
-//		graphAnalysis.computePageRanks();
-//		graphAnalysis.outputHubs(20);
 	}
 }
