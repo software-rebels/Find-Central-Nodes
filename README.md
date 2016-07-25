@@ -5,7 +5,11 @@ Description:
 
 How to Use
 	1. Obtain the trace.gdf file for the software system under consideration using MAKAO. For more instructions on how to do that visit http://mcis.polymtl.ca/makao.html .
+
 	2. In the config.properties file update the location of the trace.gdf file and the destination to store the results.
+
 	3. The file structure follows an eclipse project so one way to run the program is to import it in eclipse
-														OR
+
+							OR
+
 	3. Remove the first line "package AnalysisTools" from all source code files, then compile and run from terminal.
